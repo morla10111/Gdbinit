@@ -3828,7 +3828,138 @@ document enablecolorprompt
 | Enable color prompt
 end
 
+
+
+#
+#my functions
+#
+
+# print return address of current function 
+define sret
+    x/x $ebp+4
+end
+
+
+# searchi - search 32bit word 
+# usage: search <from> <to> <pattern>  
+define searchi
+   set $start = (char *) $arg0
+   set $end = (char *) $arg1
+   set $pattern = (int) $arg2
+   set $p = $start
+   while $p < $end
+     if (*(int *) $p) == $pattern
+       x/x $p
+     end
+     set $p++
+   end
+ end
+document searchi
+search for <pattern> where passtern is 32bit
+usage: searchc 0xbffff000 0xbffffffc 0x90909090
+end
+
+
+
+# searchc - search 8bit 
+define searchc
+   set $start = (char *) $arg0
+   set $end = (char *) $arg1
+   set $pattern = (char) $arg2
+   set $p = $start
+   while $p < $end
+     if (*(char *) $p) == $pattern
+       x/x $p
+     end
+     set $p++
+   end
+ end
+document searchc
+search for <pattern> where passtern is 8bit
+usage: searchc 0xbffff000 0xbffffffc 0x90
+end
+
+#
+# searchstr <start address> <end address> "string" <length of string (didn't find such a thing in gdb)>
+define searchstring
+  set $start = (char *) $arg0
+  set $end = (char *) $arg1
+  set $string = $arg2
+  set $len = 0
+  while $string[$len] != 0
+    set $len++
+  end
+  set $p = $start
+  while $p < $end
+    set $i = 0
+    set $found = 1
+    while $i < $len
+      if ((*(char *) ($p+$i)) != $string[$i])
+        set $found = 0
+        set $i = $len
+      end
+      set $i++
+    end
+    if $found == 1
+      printf "string '%s' found at 0x%x\n", $p, $p
+    end
+    set $p++
+  end
+end
+document searchstr
+search for <string>
+usage: searchc 0xbffff000 0xbffffffc "string"
+end
+
+
+# taviso's assemble
+define assemble
+ # dont enter routine again if user hits enter
+ dont-repeat
+ if ($argc)
+  if (*$arg0 = *$arg0)
+    # check if we have a valid address by dereferencing it,
+    # if we havnt, this will cause the routine to exit.
+  end
+  printf "Instructions will be written to %#x.\n", $arg0
+ else
+  printf "Instructions will be written to stdout.\n"
+ end
+ printf "Type instructions, one per line.\n"
+ printf "End with a line saying just \"end\".\n"
+ if ($argc)
+  # argument specified, assemble instructions into memory
+  # at address specified.
+  shell nasm -f bin -o /dev/stdout /dev/stdin \
+    <<< "$( echo "BITS 32"; while read -ep '>' r && test "$r" != end; \
+                do echo -E "$r"; done )" | hexdump -ve \
+        '1/1 "set *((unsigned char *) $arg0 + %#2_ax) = %#02x\n"' \
+            > ~/.gdbassemble
+  # load the file containing set instructions
+  source ~/.gdbassemble
+  # all done.
+  shell rm -f ~/.gdbassemble
+ else
+  # no argument, assemble instructions to stdout
+  shell nasm -f bin -o /dev/stdout /dev/stdin \
+    <<< "$( echo "BITS 32"; while read -ep '>' r && test "$r" != end; \
+                do echo -E "$r"; done )" | ndisasm -i -b32 /dev/stdin
+ end
+end
+document assemble
+Assemble instructions using nasm.
+Type a line containing "end" to indicate the end.
+If an address is specified, insert instructions at that address.
+If no address is specified, assembled instructions are printed to stdout.
+Use the pseudo instruction "org ADDR" to set the base address.
+end
+
+
+
+
+
 #EOF
+
 
 # Older change logs:
 #
